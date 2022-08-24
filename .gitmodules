@@ -1,0 +1,3 @@
+[submodule "src/TMC-API"]
+	path = src/TMC-API
+	url = https://github.com/trinamic/TMC-API.git
