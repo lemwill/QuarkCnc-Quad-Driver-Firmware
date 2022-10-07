@@ -5,6 +5,9 @@
 #include "hardware/spi.h"
 #include <string.h>
 
+#include "hardware/uart.h"
+#include "hardware/irq.h"
+
 extern "C"
 {
 #include "TMC-API/tmc/ic/TMC2160/TMC2160.h"
@@ -21,6 +24,23 @@ const int GPIO_X_STEPPER_SPI_CS = 14;
 const int GPIO_Y_STEPPER_SPI_CS = 15;
 const int GPIO_Z_STEPPER_SPI_CS = 13;
 const int GPIO_A_STEPPER_SPI_CS = 9;
+const int GPIO_RS485_RX_EN = 18;
+
+#define UART_ID uart0
+#define BAUD_RATE 19200
+#define UART_TX_PIN 16
+#define UART_RX_PIN 17
+
+static int chars_rxed = 0;
+
+// RX interrupt handler
+void on_uart_rx() {
+    while (uart_is_readable(UART_ID)) {
+        uint8_t ch = uart_getc(UART_ID);
+        printf("%d ", ch);
+        chars_rxed++;
+    }
+}
 
 
 extern "C"
@@ -66,6 +86,10 @@ void initPeripherals() {
   gpio_init(GPIO_A_STEPPER_SPI_CS);
   gpio_set_dir(GPIO_A_STEPPER_SPI_CS, GPIO_OUT);
 
+  gpio_init(GPIO_RS485_RX_EN);
+  gpio_set_dir(GPIO_RS485_RX_EN, GPIO_OUT);
+  gpio_put(GPIO_RS485_RX_EN, 0);
+
   gpio_init(GPIO_STEPPER_0_5A);
   gpio_set_dir(GPIO_STEPPER_0_5A, GPIO_IN);
   gpio_init(GPIO_STEPPER_1_0A);
@@ -74,6 +98,23 @@ void initPeripherals() {
   gpio_set_dir(GPIO_STEPPER_2_0A, GPIO_IN);
   gpio_init(GPIO_STEPPER_4_0A);
   gpio_set_dir(GPIO_STEPPER_4_0A, GPIO_IN);
+
+  uart_init(UART_ID, BAUD_RATE);
+  gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+  gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+  uart_set_fifo_enabled(UART_ID, false);
+
+    // Set up a RX interrupt
+  // We need to set up the handler first
+  // Select correct interrupt for the UART we are using
+  int UART_IRQ = UART_ID == uart0 ? UART0_IRQ : UART1_IRQ;
+
+  // And set up and enable the interrupt handlers
+  irq_set_exclusive_handler(UART_IRQ, on_uart_rx);
+  irq_set_enabled(UART_IRQ, true);
+
+  // Now enable the UART to send interrupts - RX only
+  uart_set_irq_enables(UART_ID, true, false);
 }
 
 
